@@ -32,8 +32,10 @@ jobs:
       - name: 修复 Android 编译配置
         working-directory: project
         run: |
+          # 添加 DocumentFile 依赖
           sed -i '/implementation("androidx.activity:activity-compose/a\    implementation("androidx.documentfile:documentfile:1.0.1")' app/build.gradle.kts
 
+          # Java 17 / Kotlin 17
           sed -i '/android {/a\
               compileOptions {\
                   sourceCompatibility = JavaVersion.VERSION_17\
@@ -43,9 +45,12 @@ jobs:
                   jvmTarget = "17"\
               }' app/build.gradle.kts
 
-          echo "========== 修改后的 build.gradle.kts =========="
-          cat app/build.gradle.kts
-          echo "=============================================="
+          # 修复 MainActivity.kt 缺少 setContent 导入
+          sed -i '/import androidx.activity.ComponentActivity/a import androidx.activity.compose.setContent' app/src/main/java/com/wrz/audioconverter/MainActivity.kt
+
+          echo "========== MainActivity.kt 导入 =========="
+          head -n 25 app/src/main/java/com/wrz/audioconverter/MainActivity.kt
+          echo "=========================================="
 
       - name: 生成 Gradle Wrapper
         working-directory: project
