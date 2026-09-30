@@ -5,7 +5,7 @@ on:
   push:
     paths:
       - "WRZAudioConverter.zip"
-      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/main.yml"
 
 jobs:
   build:
@@ -21,34 +21,49 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 37 SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;35.0.0"
+
       - name: Check project archive
         run: |
           echo "当前目录："
           pwd
+
           echo "仓库文件："
           ls -la
+
           echo "检查 ZIP："
-          unzip -l WRZAudioConverter.zip | head -80
+          unzip -l WRZAudioConverter.zip | head -100
 
       - name: Extract project
         run: |
+          set -e
+
           rm -rf project
           mkdir project
+
           unzip -q WRZAudioConverter.zip -d project
 
           echo "解压后的目录："
-          find project -maxdepth 3 -type f | head -100
+          find project -maxdepth 4 -type f | head -150
 
       - name: Find Android project
         run: |
           set -e
 
-          PROJECT_DIR=$(find project -name settings.gradle.kts -o -name settings.gradle | head -1)
+          PROJECT_DIR=$(find project \
+            \( -name settings.gradle.kts -o -name settings.gradle \) \
+            -print -quit)
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "找不到 settings.gradle / settings.gradle.kts"
+            echo "找不到 settings.gradle 或 settings.gradle.kts"
             echo "当前文件结构："
-            find project -maxdepth 5 -type f
+            find project -maxdepth 6 -type f
             exit 1
           fi
 
@@ -58,26 +73,64 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Check Android project configuration
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "========== settings.gradle.kts =========="
+          if [ -f settings.gradle.kts ]; then
+            cat settings.gradle.kts
+          fi
+
+          echo "========== build.gradle.kts =========="
+          if [ -f build.gradle.kts ]; then
+            cat build.gradle.kts
+          fi
+
+          echo "========== app/build.gradle.kts =========="
+          if [ -f app/build.gradle.kts ]; then
+            cat app/build.gradle.kts
+          fi
+
       - name: Generate Gradle Wrapper
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          gradle wrapper --gradle-version 8.10.2
+          set -e
 
-      - name: Make Gradle executable
+          echo "使用 Gradle 9.6.0"
+
+          gradle wrapper \
+            --gradle-version 9.6.0 \
+            --distribution-type bin
+
+      - name: Check Gradle version
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           chmod +x gradlew
 
+          echo "========== Gradle Wrapper =========="
+          cat gradle/wrapper/gradle-wrapper.properties
+
+          echo "========== Gradle Version =========="
+          ./gradlew --version
+
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          ./gradlew assembleDebug --stacktrace
+          set -e
+
+          ./gradlew assembleDebug \
+            --stacktrace \
+            --no-daemon
 
       - name: Find APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "APK 文件："
-          find . -type f -name "*.apk" -print
+          echo "========== APK 文件 =========="
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
